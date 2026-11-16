@@ -216,26 +216,20 @@ public class BirdGame extends JFrame {
         // 得分
         JPanel scorePnl = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         scorePnl.setOpaque(false);
-        JLabel sl = new JLabel("得分");
-        sl.setFont(new Font("微软雅黑", Font.PLAIN, 12));
-        sl.setForeground(SUB);
-        scoreLabel = new JLabel("0");
-        scoreLabel.setFont(new Font("Arial", Font.BOLD, 22));
+        scoreLabel = new JLabel("得分 0");
+        scoreLabel.setFont(new Font("微软雅黑", Font.BOLD, 18));
         scoreLabel.setForeground(GOLD);
-        scorePnl.add(sl); scorePnl.add(scoreLabel);
+        scorePnl.add(scoreLabel);
         gbc.gridx = 1; gbc.insets = new Insets(0, 20, 0, 8);
         top.add(scorePnl, gbc);
 
         // 最佳
         JPanel bestPnl = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         bestPnl.setOpaque(false);
-        JLabel bl = new JLabel("最佳");
-        bl.setFont(new Font("微软雅黑", Font.PLAIN, 12));
-        bl.setForeground(SUB);
-        bestLabel = new JLabel("0");
-        bestLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        bestLabel = new JLabel("最佳 0");
+        bestLabel.setFont(new Font("微软雅黑", Font.BOLD, 14));
         bestLabel.setForeground(new Color(180, 190, 210));
-        bestPnl.add(bl); bestPnl.add(bestLabel);
+        bestPnl.add(bestLabel);
         gbc.gridx = 2;
         top.add(bestPnl, gbc);
 

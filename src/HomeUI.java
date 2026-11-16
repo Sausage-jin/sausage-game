@@ -285,7 +285,7 @@ public class HomeUI extends JFrame {
         gbc.gridx = 1; gbc.gridy = 2; gbc.weightx = 0;
         panel.add(spdValLb, gbc);
 
-        final JSlider spdSlider = new JSlider(50, 200, SoundManager.getGameSpeed());
+        final JSlider spdSlider = new JSlider(50, 500, SoundManager.getGameSpeed());
         spdSlider.setOpaque(false);
         spdSlider.setPreferredSize(new Dimension(150, 26));
         gbc.gridx = 2; gbc.gridy = 2; gbc.weightx = 1;
@@ -339,6 +339,12 @@ public class HomeUI extends JFrame {
                 SoundManager.sfxEat();   // 试听
             }
         });
+        spdSlider.addChangeListener(e -> {
+            int v = spdSlider.getValue();
+            SoundManager.setGameSpeed(v);
+            spdValLb.setText(v + "%");
+        });
+        fsCb.addActionListener(e -> SoundManager.setFullscreen(fsCb.isSelected()));
         closeBtn.addActionListener(e -> dlg.dispose());
 
         dlg.setContentPane(panel);

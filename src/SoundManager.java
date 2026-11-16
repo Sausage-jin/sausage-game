@@ -300,9 +300,9 @@ public class SoundManager {
         saveSettings();
     }
 
-    /** 游戏速度倍率（50-200，100=正常1.0倍） */
+    /** 游戏速度倍率（50-500，100=正常1.0倍，最大5倍） */
     public static int  getGameSpeed()          { return gameSpeed; }
-    public static void setGameSpeed(int s)     { gameSpeed = Math.max(50, Math.min(200, s)); saveSettings(); }
+    public static void setGameSpeed(int s)     { gameSpeed = Math.max(50, Math.min(500, s)); saveSettings(); }
     public static double getSpeedMul()         { return gameSpeed / 100.0; }
 
     public static boolean isFullscreen()           { return fullscreen; }
