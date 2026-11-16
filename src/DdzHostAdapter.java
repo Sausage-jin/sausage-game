@@ -85,11 +85,14 @@ public class DdzHostAdapter implements NetPlay.NetListener, GameEngine.GameListe
         sendHandTo(pl);
     }
 
-    /** 私发手牌给对应客户端（座位1→客户端idx0，座位2→客户端idx1）；主机自己直接读引擎 */
+    /** 私发手牌给对应客户端（座位1→第1个有效客户端，座位2→第2个）；主机自己直接读引擎 */
     private void sendHandTo(Player p) {
         if (p.getId() >= 1) {
-            net.sendToClient(p.getId() - 1,
-                    "ST:DDZ_HAND:" + p.getId() + ":" + DdzCodec.cardsToStr(p.getHand()));
+            int ci = net.getClientIndexForSeat(p.getId());
+            if (ci >= 0) {
+                net.sendToClient(ci,
+                        "ST:DDZ_HAND:" + p.getId() + ":" + DdzCodec.cardsToStr(p.getHand()));
+            }
         }
     }
 

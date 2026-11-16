@@ -46,6 +46,9 @@ public interface IGameController {
     /** 提交出牌（null=过牌） */
     void submitPlay(CardPlay play);
 
+    /** 四人模式：提交猜牌（亮出一张牌）；三人模式空实现 */
+    default void submitGuess(Card card) {}
+
     /** 获取提示 */
     CardPlay getHint(List<Card> selected);
 }

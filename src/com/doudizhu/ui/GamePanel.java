@@ -406,9 +406,7 @@ public class GamePanel extends JPanel implements GameEngine.GameListener {
         }
         Card c = selected.iterator().next();
         selected.clear();
-        if (engine instanceof FourPlayerEngine) {
-            ((FourPlayerEngine) engine).submitGuess(c);
-        }
+        engine.submitGuess(c);
     }
 
     // ==================== 引擎回调 ====================

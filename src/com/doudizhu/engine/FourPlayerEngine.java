@@ -40,12 +40,36 @@ public class FourPlayerEngine implements IGameController {
     // 出牌统计
     private final int[] playCounts = new int[4];
     private Timer aiTimer = new Timer("ai4-timer", true);
+    private boolean onlineMode = false;   // 联机模式：远程座位等待操作，不触发AI
+    /** 联机模式下的人机座位集合：这些座位即使 onlineMode 也由本地 AI 代打 */
+    private final java.util.Set<Integer> botSeats = new java.util.HashSet<>();
 
     public FourPlayerEngine() {
         players.add(new Player(0, com.doudizhu.Main.userNickname, true));
         players.add(new Player(1, "电脑1", false));    // 右（东）
         players.add(new Player(2, "电脑2", false));    // 上（北）
         players.add(new Player(3, "电脑3", false));    // 左（西）
+    }
+
+    /** 联机模式：座位1/2/3为远程真人，引擎等待其操作而非AI代打 */
+    public void setOnlineMode(boolean b) { this.onlineMode = b; }
+
+    /** 联机模式下设人机座位（这些座位由本地 AI 代打）；传空集合清除所有人机 */
+    public void setBotSeats(java.util.Collection<Integer> seats) {
+        botSeats.clear();
+        if (seats != null) botSeats.addAll(seats);
+    }
+
+    /** 判断某座位在联机模式下是否为人机代打 */
+    private boolean isOnlineBot(int playerId) {
+        return onlineMode && botSeats.contains(playerId);
+    }
+
+    /** 设置玩家昵称（联机时主机根据客户端信息设置） */
+    public void setPlayerName(int id, String name) {
+        if (id >= 0 && id < 4 && name != null && !name.isEmpty()) {
+            players.get(id).setName(name);
+        }
     }
 
     // ==================== IGameController ====================
@@ -124,8 +148,8 @@ public class FourPlayerEngine implements IGameController {
             return;
         }
         Player p = players.get(currentPlayer);
-        if (p.isHuman()) {
-            // 等待玩家手动选牌亮出
+        if (!isOnlineBot(p.getId()) && (p.isHuman() || onlineMode)) {
+            // 等待玩家操作（联机人机座位由本地AI代打）
         } else {
             aiTimer.schedule(new TimerTask() {
                 @Override public void run() {
@@ -193,8 +217,8 @@ public class FourPlayerEngine implements IGameController {
     private void nextPlay() {
         if (state != GameEngine.State.PLAYING) return;
         Player p = players.get(currentPlayer);
-        if (p.isHuman()) {
-            // 等待玩家操作
+        if (!isOnlineBot(p.getId()) && (p.isHuman() || onlineMode)) {
+            // 等待玩家操作（联机人机座位由本地AI代打）
         } else {
             aiTimer.schedule(new TimerTask() {
                 @Override public void run() {

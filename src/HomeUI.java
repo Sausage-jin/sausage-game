@@ -16,14 +16,14 @@ import javax.imageio.ImageIO;
 public class HomeUI extends JFrame {
     private NetPlay netPlay;
     private int myPlayer = 0;   // 0=未联机, 1=主机, 2=客户端, 3=观众
-    private int netMode = 0;    // 0=未定, 1=烂头背枪, 2=五子棋双人, 3=五子棋三人, 4=俄罗斯方块
-    private int netPlayerNum = 0; // 三人模式客户端的实际玩家号(2或3)
+    private int netMode = 0;    // 0=未定, 1=烂头背枪, 2=五子棋双人, 3=五子棋三人, 4=俄罗斯方块, 5=你画我猜, 6=斗地主3人, 7=小鸟飞翔, 8=斗地主4人
+    private int netPlayerNum = 0; // 三人/四人模式客户端的实际玩家号(2/3/4)
     private JLabel statusLabel;
     private static final int NET_PORT = 3721;
 
     // 房间等待对话框
     private JDialog roomDlg;
-    private JRadioButton modeLtbqBtn, modeGomoku2Btn, modeGomoku3Btn, modeTetrisBtn, modeDrawGuessBtn, modeDdzBtn;
+    private JRadioButton modeLtbqBtn, modeGomoku2Btn, modeGomoku3Btn, modeTetrisBtn, modeDrawGuessBtn, modeDdzBtn, modeBirdBtn, modeDdz4Btn;
     private JLabel roomConnLabel;
     private JLabel roomSpecLabel;
     private JButton startBtn;
@@ -689,7 +689,7 @@ public class HomeUI extends JFrame {
             netPlay.setMyGender(SoundManager.getGender());
             myPlayer = 1;
             netMode = 0; // 待主机在房间里选定
-            netPlay.hostMulti(NET_PORT, 2, mkNetListener());
+            netPlay.hostMulti(NET_PORT, 3, mkNetListener());  // 最多3个客户端（四人斗地主）
             statusLabel.setText("房间已创建，等待加入  IP:" + getLocalIP() + "  端口:" + NET_PORT);
             showHostRoom();
         } catch (Exception ex) {
@@ -701,24 +701,15 @@ public class HomeUI extends JFrame {
     private void joinGame() {
         String ip = JOptionPane.showInputDialog(this, "输入主机IP：", "加入房间", JOptionPane.PLAIN_MESSAGE);
         if (ip == null || ip.trim().isEmpty()) return;
-        String[] roles = {"以玩家身份加入", "以观众身份加入", "取消"};
-        int role = showVerticalOptions("加入房间", "选择加入身份：", roles);
-        if (role == 2) return;
-        boolean asSpec = (role == 1);
+        // 统一以玩家身份加入，房间内可切换为观众
         try {
             netPlay = new NetPlay();
             netPlay.setMyNick(SoundManager.getNickname());
             netPlay.setMyAvatar(SoundManager.getAvatar());
             netPlay.setMyGender(SoundManager.getGender());
-            if (asSpec) {
-                myPlayer = 3;
-                netPlay.connect(ip.trim(), NET_PORT, mkNetListener(), true);
-                statusLabel.setText("已以观众身份连接，等待主机开始...");
-            } else {
-                myPlayer = 2;
-                netPlay.connect(ip.trim(), NET_PORT, mkNetListener(), false);
-                statusLabel.setText("已连接，等待主机确认模式...");
-            }
+            myPlayer = 2;
+            netPlay.connect(ip.trim(), NET_PORT, mkNetListener(), false);
+            statusLabel.setText("已连接，等待主机确认模式...");
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "连接失败：" + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
             netPlay = null; myPlayer = 0; netMode = 0; netPlayerNum = 0;
@@ -766,12 +757,28 @@ public class HomeUI extends JFrame {
             updateRoomStatus();
             return;
         }
+        if (state.startsWith("ROLE:")) {
+            // 主机确认角色切换
+            String role = state.substring(5).trim();
+            if ("SPEC".equals(role)) {
+                myPlayer = 3;
+                closeRoomDlg();
+                showSpectatorRoom();
+            } else if ("PLAYER".equals(role)) {
+                myPlayer = 2;
+                closeRoomDlg();
+                showClientRoom();
+            } else if ("FULL".equals(role)) {
+                JOptionPane.showMessageDialog(this, "玩家槽位已满，无法切换回玩家", "提示", JOptionPane.INFORMATION_MESSAGE);
+            }
+            return;
+        }
         if (state.startsWith("MODE:")) {
             int mode = 1;
             try { mode = Integer.parseInt(state.substring(5).trim()); } catch (Exception e) { }
             netMode = mode;
             if (myPlayer == 3) {
-                if (mode == 6) {
+                if (mode == 6 || mode == 8) {
                     JOptionPane.showMessageDialog(this, "斗地主暂不支持观战", "提示", JOptionPane.INFORMATION_MESSAGE);
                     cancelNet();
                     return;
@@ -779,15 +786,15 @@ public class HomeUI extends JFrame {
                 enterGame(mode, 0);  // 观众进入观战
                 return;
             }
-            if (mode != 3 && mode != 6) {
+            if (mode != 3 && mode != 6 && mode != 8) {
                 enterGame(mode, 2);  // 双人模式客户端固定为白方(2)
             }
-            // 三人模式（五子棋/斗地主）：等待 PLAYER:n 消息确定玩家号
+            // 三人/四人模式（五子棋三人/斗地主）：等待 PLAYER:n 消息确定玩家号
         } else if (state.startsWith("PLAYER:") && myPlayer == 2) {
             int p = 2;
             try { p = Integer.parseInt(state.substring(7).trim()); } catch (Exception e) { }
             netPlayerNum = p;
-            if (netMode == 3 || netMode == 6) {
+            if (netMode == 3 || netMode == 6 || netMode == 8) {
                 enterGame(netMode, p);
             }
         }
@@ -796,8 +803,11 @@ public class HomeUI extends JFrame {
     private void enterGame(int mode, int player) {
         closeRoomDlg();
         NetPlay np = netPlay;
-        if (mode == 6) {
-            enterDdzGame(np, player);
+        if (mode == 6 || mode == 8) {
+            enterDdzGame(np, player, mode);
+        } else if (mode == 7) {
+            BirdGame gui = new BirdGame(np, player);
+            gui.setVisible(true);
         } else if (mode == 3) {
             GomokuUI gui = new GomokuUI(np, player, 3);
             gui.setVisible(true);
@@ -817,14 +827,15 @@ public class HomeUI extends JFrame {
         dispose();
     }
 
-    /** 斗地主联机：主机用 GameEngine+DdzHostAdapter，客户端用 DdzRemoteController */
-    private void enterDdzGame(NetPlay np, int player) {
+    /** 斗地主联机：主机用引擎+适配器，客户端用远程控制器；mode 6=三人 8=四人 */
+    private void enterDdzGame(NetPlay np, int player, int mode) {
         SoundManager.switchBgm(5);   // 斗地主背景音乐
         com.doudizhu.Main.userNickname = SoundManager.getNickname();
         com.doudizhu.Main.userAvatarPath = SoundManager.AVATAR_FILES[SoundManager.getAvatar()];
         com.doudizhu.ui.CardPainter.preloadAsync();
         com.doudizhu.ui.SoundPlayer.init();
-        JFrame frame = new JFrame(player == 1 ? "欢乐斗地主·联机(房主)" : "欢乐斗地主·联机");
+        boolean fourP = (mode == 8);
+        JFrame frame = new JFrame((fourP ? "四人斗地主" : "欢乐斗地主") + "·联机" + (player == 1 ? "(房主)" : ""));
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.addWindowListener(new WindowAdapter() {
             @Override public void windowClosed(WindowEvent e) {
@@ -836,33 +847,64 @@ public class HomeUI extends JFrame {
         });
         frame.setResizable(false);
         if (player == 1) {
-            // 主机：权威引擎 + 适配器桥接 NetPlay 协议
-            com.doudizhu.engine.GameEngine engine = new com.doudizhu.engine.GameEngine();
-            engine.setOnlineMode(true);
-            // 人机补位：计算人机座位（座位0=主机，座位1=玩家2槽位，座位2=玩家3槽位）
-            java.util.Set<Integer> botSeats = new java.util.HashSet<>();
-            if (np.isSeatBot(2)) botSeats.add(1);
-            if (np.isSeatBot(3)) botSeats.add(2);
-            if (!botSeats.isEmpty()) engine.setBotSeats(botSeats);
-            new DdzHostAdapter(np, engine);
-            com.doudizhu.ui.GamePanel panel = new com.doudizhu.ui.GamePanel(engine, true);
-            panel.setOnBackToHome(frame::dispose);
-            frame.setContentPane(panel);
-            frame.pack();
-            frame.setLocationRelativeTo(null);
-            frame.setVisible(true);
-            panel.requestFocusInWindow();
-            engine.startNewGame();
+            if (fourP) {
+                // 四人模式：主机用 FourPlayerEngine + Ddz4HostAdapter
+                com.doudizhu.engine.FourPlayerEngine engine = new com.doudizhu.engine.FourPlayerEngine();
+                engine.setOnlineMode(true);
+                java.util.Set<Integer> botSeats = new java.util.HashSet<>();
+                if (np.isSeatBot(2)) botSeats.add(1);
+                if (np.isSeatBot(3)) botSeats.add(2);
+                if (np.isSeatBot(4)) botSeats.add(3);
+                if (!botSeats.isEmpty()) engine.setBotSeats(botSeats);
+                new Ddz4HostAdapter(np, engine);
+                com.doudizhu.ui.GamePanel panel = new com.doudizhu.ui.GamePanel(engine, true);
+                panel.setOnBackToHome(frame::dispose);
+                frame.setContentPane(panel);
+                frame.pack();
+                frame.setLocationRelativeTo(null);
+                frame.setVisible(true);
+                panel.requestFocusInWindow();
+                engine.startNewGame();
+            } else {
+                // 三人模式：主机用 GameEngine + DdzHostAdapter
+                com.doudizhu.engine.GameEngine engine = new com.doudizhu.engine.GameEngine();
+                engine.setOnlineMode(true);
+                java.util.Set<Integer> botSeats = new java.util.HashSet<>();
+                if (np.isSeatBot(2)) botSeats.add(1);
+                if (np.isSeatBot(3)) botSeats.add(2);
+                if (!botSeats.isEmpty()) engine.setBotSeats(botSeats);
+                new DdzHostAdapter(np, engine);
+                com.doudizhu.ui.GamePanel panel = new com.doudizhu.ui.GamePanel(engine, true);
+                panel.setOnBackToHome(frame::dispose);
+                frame.setContentPane(panel);
+                frame.pack();
+                frame.setLocationRelativeTo(null);
+                frame.setVisible(true);
+                panel.requestFocusInWindow();
+                engine.startNewGame();
+            }
         } else {
-            // 客户端：远程控制器镜像主机状态
-            DdzRemoteController controller = new DdzRemoteController(np, player);
-            com.doudizhu.ui.GamePanel panel = new com.doudizhu.ui.GamePanel(controller, true);
-            panel.setOnBackToHome(frame::dispose);
-            frame.setContentPane(panel);
-            frame.pack();
-            frame.setLocationRelativeTo(null);
-            frame.setVisible(true);
-            panel.requestFocusInWindow();
+            if (fourP) {
+                // 四人客户端：Ddz4RemoteController 镜像主机状态
+                Ddz4RemoteController controller = new Ddz4RemoteController(np, player);
+                com.doudizhu.ui.GamePanel panel = new com.doudizhu.ui.GamePanel(controller, true);
+                panel.setOnBackToHome(frame::dispose);
+                frame.setContentPane(panel);
+                frame.pack();
+                frame.setLocationRelativeTo(null);
+                frame.setVisible(true);
+                panel.requestFocusInWindow();
+            } else {
+                // 三人客户端：DdzRemoteController 镜像主机状态
+                DdzRemoteController controller = new DdzRemoteController(np, player);
+                com.doudizhu.ui.GamePanel panel = new com.doudizhu.ui.GamePanel(controller, true);
+                panel.setOnBackToHome(frame::dispose);
+                frame.setContentPane(panel);
+                frame.pack();
+                frame.setLocationRelativeTo(null);
+                frame.setVisible(true);
+                panel.requestFocusInWindow();
+            }
         }
     }
 
@@ -939,6 +981,8 @@ public class HomeUI extends JFrame {
         modeTetrisBtn = mkRadio("俄罗斯方块（2人）");
         modeDrawGuessBtn = mkRadio("你画我猜（2人）");
         modeDdzBtn = mkRadio("斗地主（3人）");
+        modeDdz4Btn = mkRadio("斗地主·四人2v2（4人）");
+        modeBirdBtn = mkRadio("小鸟飞翔（2人）");
         ButtonGroup grp = new ButtonGroup();
         grp.add(modeLtbqBtn);
         grp.add(modeGomoku2Btn);
@@ -946,6 +990,8 @@ public class HomeUI extends JFrame {
         grp.add(modeTetrisBtn);
         grp.add(modeDrawGuessBtn);
         grp.add(modeDdzBtn);
+        grp.add(modeDdz4Btn);
+        grp.add(modeBirdBtn);
         modeLtbqBtn.setSelected(true);
 
         JPanel modeContent = new JPanel(new GridLayout(0, 1, 0, 2));
@@ -956,6 +1002,8 @@ public class HomeUI extends JFrame {
         modeContent.add(modeTetrisBtn);
         modeContent.add(modeDrawGuessBtn);
         modeContent.add(modeDdzBtn);
+        modeContent.add(modeDdz4Btn);
+        modeContent.add(modeBirdBtn);
         JPanel modeSection = mkCollapseSection("游戏模式（点击选择）", modeContent, false);
         gbc.gridy = 3;
         gbc.insets = new Insets(2, 4, 6, 4);
@@ -968,6 +1016,8 @@ public class HomeUI extends JFrame {
         modeTetrisBtn.addActionListener(modeListener);
         modeDrawGuessBtn.addActionListener(modeListener);
         modeDdzBtn.addActionListener(modeListener);
+        modeDdz4Btn.addActionListener(modeListener);
+        modeBirdBtn.addActionListener(modeListener);
 
         roomConnLabel = new JLabel(" ");
         roomConnLabel.setFont(lbFont);
@@ -1052,12 +1102,21 @@ public class HomeUI extends JFrame {
         gbc.insets = new Insets(0, 4, 10, 4);
         panel.add(waitLb, gbc);
 
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+        btnPanel.setOpaque(false);
+        JButton toSpecBtn = mkMenuBtn("切换为观众");
+        toSpecBtn.setPreferredSize(new Dimension(120, 38));
         JButton cancelBtn = mkMenuBtn("取消");
-        cancelBtn.setPreferredSize(new Dimension(110, 38));
+        cancelBtn.setPreferredSize(new Dimension(100, 38));
+        btnPanel.add(toSpecBtn);
+        btnPanel.add(cancelBtn);
         gbc.gridy = 4;
         gbc.insets = new Insets(2, 4, 4, 4);
-        panel.add(cancelBtn, gbc);
+        panel.add(btnPanel, gbc);
 
+        toSpecBtn.addActionListener(e -> {
+            if (netPlay != null) netPlay.requestSpectator();
+        });
         cancelBtn.addActionListener(e -> {
             closeRoomDlg();
             cancelNet();
@@ -1115,11 +1174,24 @@ public class HomeUI extends JFrame {
         gbc.insets = new Insets(0, 4, 10, 4);
         panel.add(waitLb, gbc);
 
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+        btnPanel.setOpaque(false);
+        // 房间内切换来的观众可切换回玩家（JOIN:SPECTATOR 直连观众不可）
+        boolean canSwitch = netPlay != null && netPlay.isRoleSpectator();
+        if (canSwitch) {
+            JButton toPlayerBtn = mkMenuBtn("切换为玩家");
+            toPlayerBtn.setPreferredSize(new Dimension(120, 38));
+            toPlayerBtn.addActionListener(e -> {
+                if (netPlay != null) netPlay.requestPlayer();
+            });
+            btnPanel.add(toPlayerBtn);
+        }
         JButton cancelBtn = mkMenuBtn("取消");
-        cancelBtn.setPreferredSize(new Dimension(110, 38));
+        cancelBtn.setPreferredSize(new Dimension(100, 38));
+        btnPanel.add(cancelBtn);
         gbc.gridy = 4;
         gbc.insets = new Insets(2, 4, 4, 4);
-        panel.add(cancelBtn, gbc);
+        panel.add(btnPanel, gbc);
 
         cancelBtn.addActionListener(e -> {
             closeRoomDlg();
@@ -1311,10 +1383,10 @@ public class HomeUI extends JFrame {
         if (myPlayer == 1) {
             // 主机：重建信息卡 + 更新人数
             rebuildHostCards();
-            int need = modeGomoku3Btn.isSelected() ? 2 : 1;
-            int connected = netPlay.getConnectedClients();
+            int need = getModeNeed();
+            int effPlayers = netPlay.getEffectivePlayerCount();
             int bots = netPlay.getBotCount();
-            int total = connected + bots;
+            int total = effPlayers + bots;
             roomConnLabel.setText("已连接玩家：" + total + " / " + need
                     + (total < need ? "，等待加入…" : "，可以开始！"));
             roomConnLabel.setForeground(total >= need ? GOLD : SUB);
@@ -1327,16 +1399,24 @@ public class HomeUI extends JFrame {
         }
     }
 
-    /** 主机端：重建玩家信息卡（主机+已连客户端+等待槽位+观众） */
+    /** 当前所选模式需要的客户端玩家数（不含主机） */
+    private int getModeNeed() {
+        if (modeDdz4Btn != null && modeDdz4Btn.isSelected()) return 3;
+        if (modeGomoku3Btn != null && modeGomoku3Btn.isSelected()) return 2;
+        if (modeDdzBtn != null && modeDdzBtn.isSelected()) return 2;
+        return 1;
+    }
+
+    /** 主机端：重建玩家信息卡（主机+有效客户端+人机+等待槽位+观众） */
     private void rebuildHostCards() {
         if (roomCardsPanel == null || netPlay == null || modeGomoku3Btn == null) return;
         roomCardsPanel.removeAll();
         // 主机卡
         roomCardsPanel.add(mkPlayerCard(SoundManager.getNickname(),
                 SoundManager.getAvatar(), SoundManager.getGender(), "主机", GOLD));
-        // 已连接客户端卡
-        int connected = netPlay.getConnectedClients();
-        for (int i = 0; i < connected; i++) {
+        // 有效（非观众）客户端卡
+        int effPlayers = netPlay.getEffectivePlayerCount();
+        for (int i = 0; i < effPlayers; i++) {
             String nick = netPlay.getPlayerNick(i + 2);
             roomCardsPanel.add(mkPlayerCard(nick,
                     netPlay.getPlayerAvatar(i + 2), netPlay.getPlayerGender(i + 2),
@@ -1345,7 +1425,6 @@ public class HomeUI extends JFrame {
         // 人机卡（带删除按钮）
         int botCount = netPlay.getBotCount();
         for (int i = 0; i < botCount; i++) {
-            final int bi = i;
             roomCardsPanel.add(mkBotCard(netPlay.getBotNick(i),
                     netPlay.getBotAvatar(i), netPlay.getBotGender(i),
                     "人机", new ActionListener() {
@@ -1356,8 +1435,8 @@ public class HomeUI extends JFrame {
                     }));
         }
         // 等待槽位（可点击加人机）
-        int need = modeGomoku3Btn.isSelected() ? 2 : 1;
-        for (int i = connected + botCount; i < need; i++) {
+        int need = getModeNeed();
+        for (int i = effPlayers + botCount; i < need; i++) {
             roomCardsPanel.add(mkWaitingCard("玩家" + (i + 2), new ActionListener() {
                 public void actionPerformed(ActionEvent e) {
                     int r = netPlay.addBot();
@@ -1369,7 +1448,7 @@ public class HomeUI extends JFrame {
                 }
             }));
         }
-        // 观众卡
+        // 观众卡（含观众角色客户端）
         for (String[] info : netPlay.getSpectatorInfos()) {
             int av = 0, gd = 0;
             try { av = Integer.parseInt(info[1]); } catch (Exception e) { }
@@ -1408,9 +1487,14 @@ public class HomeUI extends JFrame {
                     netPlay.getPlayerAvatar(2), netPlay.getPlayerGender(2), "玩家2", new Color(120, 180, 255)));
         }
         String p3 = netPlay.getPlayerNick(3);
-        if (p3 != null) {
+        if (p3 != null && myPlayer != 3) {
             roomCardsPanel.add(mkPlayerCard(p3,
                     netPlay.getPlayerAvatar(3), netPlay.getPlayerGender(3), "玩家3", new Color(120, 180, 255)));
+        }
+        String p4 = netPlay.getPlayerNick(4);
+        if (p4 != null) {
+            roomCardsPanel.add(mkPlayerCard(p4,
+                    netPlay.getPlayerAvatar(4), netPlay.getPlayerGender(4), "玩家4", new Color(120, 180, 255)));
         }
         roomCardsPanel.revalidate();
         roomCardsPanel.repaint();
@@ -1420,36 +1504,44 @@ public class HomeUI extends JFrame {
         }
     }
 
-    /** 主机点开始游戏：发送模式给客户端，三方进入 */
+    /** 主机点开始游戏：发送模式给客户端，多方进入 */
     private void startGameFromRoom() {
         if (netPlay == null) return;
-        int mode = modeDdzBtn.isSelected() ? 6 : modeGomoku3Btn.isSelected() ? 3 : modeGomoku2Btn.isSelected() ? 2 : modeTetrisBtn.isSelected() ? 4 : modeDrawGuessBtn.isSelected() ? 5 : 1;
-        int need = (mode == 3 || mode == 6) ? 2 : 1;
-        int connected = netPlay.getConnectedClients();
+        int mode = modeDdz4Btn.isSelected() ? 8 : modeDdzBtn.isSelected() ? 6 : modeBirdBtn.isSelected() ? 7
+                : modeGomoku3Btn.isSelected() ? 3 : modeGomoku2Btn.isSelected() ? 2
+                : modeTetrisBtn.isSelected() ? 4 : modeDrawGuessBtn.isSelected() ? 5 : 1;
+        int need = (mode == 3 || mode == 6) ? 2 : (mode == 8) ? 3 : 1;
+        int effPlayers = netPlay.getEffectivePlayerCount();
         int bots = netPlay.getBotCount();
-        if (connected + bots < need) {
+        if (effPlayers + bots < need) {
             JOptionPane.showMessageDialog(roomDlg, "等待玩家加入…", "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        // 非斗地主模式暂不支持人机补位
-        if (bots > 0 && mode != 6) {
+        // 仅斗地主（3人/4人）支持人机补位
+        if (bots > 0 && mode != 6 && mode != 8) {
             JOptionPane.showMessageDialog(roomDlg, "该模式暂不支持人机补位，请先移除人机", "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         netPlay.stopAccept(); // 不再接受新连接
         netMode = mode;
         netPlay.broadcastRoomInfo(); // 开局前同步昵称和观众数
-        if (mode == 3 || mode == 6) {
+        if (mode == 3 || mode == 6 || mode == 8) {
+            // 三人/四人模式：按有效玩家顺序分配玩家号
             netPlay.sendState("MODE:" + mode);
-            netPlay.sendToClient(0, "ST:PLAYER:2");
-            netPlay.sendToClient(1, "ST:PLAYER:3");
+            java.util.List<Integer> pi = netPlay.getPlayerClientIndices();
+            for (int i = 0; i < pi.size(); i++) {
+                netPlay.sendToClient(pi.get(i), "ST:PLAYER:" + (i + 2));
+            }
             closeRoomDlg();
             enterGame(mode, 1);
         } else {
-            // 双人模式：若多余玩家客户端已连入，通知并踢出
-            if (connected > 1) {
-                netPlay.sendToClient(1, "ST:FULL");
-                netPlay.kickClient(1);
+            // 双人模式：若多余有效玩家客户端已连入，通知并踢出（观众角色不踢）
+            if (effPlayers > 1) {
+                java.util.List<Integer> pi = netPlay.getPlayerClientIndices();
+                for (int i = 1; i < pi.size(); i++) {
+                    netPlay.sendToClient(pi.get(i), "ST:FULL");
+                    netPlay.kickClient(pi.get(i));
+                }
             }
             netPlay.sendState("MODE:" + mode);
             closeRoomDlg();

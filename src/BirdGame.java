@@ -51,10 +51,16 @@ public class BirdGame extends JFrame {
     private int shake = 0;
     private int frame = 0;
 
+    // ---- 联机 ----
+    private NetPlay netPlay = null;
+    private int myPlayer = 0;       // 联机：1=主机 2=客户端 0=观众
+    private boolean online = false;
+
     private Timer timer;
     private GamePanel gamePanel;
     private JLabel scoreLabel, bestLabel;
     private final Random rnd = new Random();
+    private JDialog overDlg = null;   // 游戏结束对话框（联机时可编程关闭）
 
     // ---- 配色 ----
     private static final Color BG       = new Color(18, 21, 32);
@@ -112,6 +118,19 @@ public class BirdGame extends JFrame {
         loadImages();
         initUI();
         initClouds();
+        newGame(false);
+    }
+
+    /** 联机构造器：player 1=主机(玩家1·F键上升) 2=客户端(玩家2·↓键下降) 0=观众 */
+    public BirdGame(NetPlay np, int player) {
+        this.netPlay = np;
+        this.myPlayer = player;
+        this.online = true;
+        this.versusMode = false;   // 联机为双人合作模式
+        loadImages();
+        initUI();
+        initClouds();
+        if (netPlay != null) netPlay.setListener(mkNetListener());
         newGame(false);
     }
 
@@ -186,7 +205,9 @@ public class BirdGame extends JFrame {
         top.setPreferredSize(new Dimension(0, 56));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridy = 0; gbc.insets = new Insets(0, 16, 0, 8); gbc.anchor = GridBagConstraints.WEST;
-        JLabel title = new JLabel(versusMode ? "小鸟飞翔 · 双人双鸟" : "小鸟飞翔 · 双人合作");
+        JLabel title = new JLabel(online
+                ? (myPlayer == 1 ? "小鸟飞翔 · 联机(玩家1·F上升)" : myPlayer == 2 ? "小鸟飞翔 · 联机(玩家2·↓下降)" : "小鸟飞翔 · 观战")
+                : (versusMode ? "小鸟飞翔 · 双人双鸟" : "小鸟飞翔 · 双人合作"));
         title.setFont(new Font("微软雅黑", Font.BOLD, 17));
         title.setForeground(GOLD);
         gbc.gridx = 0; gbc.weightx = 0;
@@ -272,7 +293,13 @@ public class BirdGame extends JFrame {
     private void tick() {
         frame++;
         updateClouds();
-        if (over) { updateParticles(); gamePanel.repaint(); return; }
+        if (online && myPlayer != 1) {
+            // 客户端/观众：不运行游戏逻辑，只更新本地装饰并重绘（状态由主机同步）
+            updateParticles();
+            gamePanel.repaint();
+            return;
+        }
+        if (over) { updateParticles(); gamePanel.repaint(); sendStateIfOnline(); return; }
         if (paused || !begun) { gamePanel.repaint(); return; }
         updateBird();
         spawnCD--;
@@ -285,6 +312,7 @@ public class BirdGame extends JFrame {
         checkCollisions();
         gamePanel.repaint();
         updateLabels();
+        sendStateIfOnline();
     }
 
     private void updateBird() {
@@ -493,6 +521,7 @@ public class BirdGame extends JFrame {
 
     private void showOverDlg() {
         if (!over) return;
+        closeOverDlg();
         String msg;
         if (versusMode) {
             msg = "玩家1得分：" + score1 + "    玩家2得分：" + score2 + "\n";
@@ -505,12 +534,50 @@ public class BirdGame extends JFrame {
             msg = "得分：" + score + "    最佳：" + best;
             if (score >= best && score > 0) msg += "\n新纪录！";
         }
-        Object[] opts = {"再来一局", "返回主页"};
-        int r = JOptionPane.showOptionDialog(this, msg, "小鸟坠落",
-                JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, opts, opts[0]);
-        if (r == 0) newGame(true);
-        else if (r == 1) goHome();
-        else gamePanel.requestFocusInWindow();
+        final JDialog dlg = new JDialog(this, "小鸟坠落", true);
+        dlg.setResizable(false);
+        overDlg = dlg;
+        JPanel panel = new JPanel(new BorderLayout(0, 0));
+        panel.setBackground(new Color(24, 27, 38));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(80, 86, 108), 2),
+            BorderFactory.createEmptyBorder(24, 28, 18, 28)));
+        JLabel titleLb = new JLabel("小鸟坠落", SwingConstants.CENTER);
+        titleLb.setFont(new Font("微软雅黑", Font.BOLD, 26));
+        titleLb.setForeground(GOLD);
+        panel.add(titleLb, BorderLayout.NORTH);
+        JLabel msgLb = new JLabel("<html><div style='text-align:center;'>" + msg.replace("\n", "<br>") + "</div></html>", SwingConstants.CENTER);
+        msgLb.setFont(new Font("微软雅黑", Font.PLAIN, 14));
+        msgLb.setForeground(SUB);
+        msgLb.setBorder(BorderFactory.createEmptyBorder(12, 0, 16, 0));
+        panel.add(msgLb, BorderLayout.CENTER);
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 0));
+        btnPanel.setOpaque(false);
+        JButton againBtn = mkBtn(online && myPlayer != 1 ? "等待主机重开" : "再来一局");
+        againBtn.setPreferredSize(new Dimension(130, 36));
+        JButton homeBtn = mkBtn("返回主页");
+        homeBtn.setPreferredSize(new Dimension(110, 36));
+        if (online && myPlayer == 0) {
+            btnPanel.add(homeBtn);
+        } else {
+            btnPanel.add(againBtn);
+            btnPanel.add(homeBtn);
+        }
+        panel.add(btnPanel, BorderLayout.SOUTH);
+        againBtn.addActionListener(e -> {
+            closeOverDlg();
+            if (online && myPlayer == 2 && netPlay != null) netPlay.sendOp("BIRDNEW");
+            else { newGame(true); if (online) sendStateIfOnline(); }
+        });
+        homeBtn.addActionListener(e -> { closeOverDlg(); goHome(); });
+        dlg.setContentPane(panel);
+        dlg.pack();
+        dlg.setLocationRelativeTo(this);
+        dlg.setVisible(true);
+    }
+
+    private void closeOverDlg() {
+        if (overDlg != null) { overDlg.dispose(); overDlg = null; }
     }
 
     private void updateParticles() {
@@ -544,6 +611,8 @@ public class BirdGame extends JFrame {
 
     private void goHome() {
         if (timer != null) timer.stop();
+        closeOverDlg();
+        if (online && netPlay != null) { netPlay.close(); netPlay = null; }
         SoundManager.switchBgm(0);
         dispose();
         new HomeUI().setVisible(true);
@@ -610,6 +679,10 @@ public class BirdGame extends JFrame {
     }
 
     private void handleKey(int k, boolean pressed) {
+        if (online) {
+            handleKeyOnline(k, pressed);
+            return;
+        }
         // 拍翅音效：按键边沿（松开再按才重复，避免按住连发）
         if (k == KeyEvent.VK_F)    { if (pressed && !keyF) SoundManager.sfxBirdFlap(); keyF = pressed; }
         if (k == KeyEvent.VK_DOWN) { if (pressed && !keyDown) SoundManager.sfxBirdFlap(); keyDown = pressed; }
@@ -619,6 +692,178 @@ public class BirdGame extends JFrame {
         if (k == KeyEvent.VK_P) togglePause();
         if ((k == KeyEvent.VK_R || k == KeyEvent.VK_SPACE) && over) newGame(true);
         if (!begun && !over) { begun = true; SoundManager.sfxGameStart(); }
+    }
+
+    /** 联机按键：主机=玩家1(F上升)，客户端=玩家2(↓下降)，观众无操作 */
+    private void handleKeyOnline(int k, boolean pressed) {
+        if (myPlayer == 1) {
+            // 主机：本地控制 F 键（上升），↓ 键也允许本地按（合作模式）
+            if (k == KeyEvent.VK_F)    { if (pressed && !keyF) SoundManager.sfxBirdFlap(); keyF = pressed; }
+            if (k == KeyEvent.VK_DOWN) { if (pressed && !keyDown) SoundManager.sfxBirdFlap(); keyDown = pressed; }
+            if (!pressed) return;
+            if (k == KeyEvent.VK_P) { togglePause(); sendStateIfOnline(); }
+            if ((k == KeyEvent.VK_R || k == KeyEvent.VK_SPACE) && over) newGame(true);
+            if (!begun && !over) { begun = true; SoundManager.sfxGameStart(); sendStateIfOnline(); }
+        } else if (myPlayer == 2 && netPlay != null) {
+            // 客户端：↓ 键发操作给主机
+            if (k == KeyEvent.VK_DOWN) {
+                if (pressed && !keyDown) SoundManager.sfxBirdFlap();
+                keyDown = pressed;
+                netPlay.sendOp("BIRDK:D:" + (pressed ? 1 : 0));
+                return;
+            }
+            if (!pressed) return;
+            if (k == KeyEvent.VK_P) netPlay.sendOp("BIRDP");
+            if ((k == KeyEvent.VK_R || k == KeyEvent.VK_SPACE) && over) netPlay.sendOp("BIRDNEW");
+            if (!begun && !over) netPlay.sendOp("BIRDSTART");
+        }
+        // 观众（myPlayer==0）：无操作
+    }
+
+    // ==================== 联机 ====================
+
+    /** 主机发送状态同步 */
+    private void sendStateIfOnline() {
+        if (online && netPlay != null && myPlayer == 1) {
+            netPlay.sendState("BSTATE:" + serializeState());
+        }
+    }
+
+    private NetPlay.NetListener mkNetListener() {
+        return new NetPlay.NetListener() {
+            public void onConnected() { }
+            public void onStateReceived(String state) { BirdGame.this.onNetState(state); }
+            public void onOpReceived(String op) { BirdGame.this.onNetOp(op); }
+            public void onChatReceived(String msg) { }
+            public void onDisconnected() { BirdGame.this.onNetDisconnect(); }
+        };
+    }
+
+    /** 客户端/观众接收主机状态 */
+    private void onNetState(String state) {
+        if (!state.startsWith("BSTATE:")) return;
+        boolean wasOver = over;
+        deserializeState(state.substring(7));
+        updateLabels();
+        if (gamePanel != null) gamePanel.repaint();
+        if (over && !wasOver) {
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() { showOverDlg(); }
+            });
+        } else if (!over && wasOver) {
+            closeOverDlg();
+        }
+    }
+
+    /** 主机接收客户端操作 */
+    private void onNetOp(String op) {
+        if (!online || myPlayer != 1 || netPlay == null) return;
+        String[] p = op.split(":", -1);
+        if ("BIRDK".equals(p[0]) && p.length >= 3) {
+            boolean pressed = "1".equals(p[1].trim());
+            if (pressed && !keyDown) SoundManager.sfxBirdFlap();
+            keyDown = pressed;
+        } else if ("BIRDP".equals(p[0])) {
+            togglePause();
+            sendStateIfOnline();
+        } else if ("BIRDNEW".equals(p[0])) {
+            if (over) newGame(true);
+        } else if ("BIRDSTART".equals(p[0])) {
+            if (!begun && !over) { begun = true; SoundManager.sfxGameStart(); sendStateIfOnline(); }
+        }
+    }
+
+    private void onNetDisconnect() {
+        if (netPlay == null) return;
+        NetPlay np = netPlay;
+        netPlay = null;
+        np.close();
+        online = false; myPlayer = 0;
+        if (timer != null) timer.stop();
+        closeOverDlg();
+        SoundManager.sfxNetDisconnect();
+        JOptionPane.showMessageDialog(this, "对方已断开，回到本地模式", "联机", JOptionPane.WARNING_MESSAGE);
+        newGame(false);
+    }
+
+    /** 序列化游戏状态：y|tilt|flap|score|over|paused|begun|S:障碍列表|R:奖励列表 */
+    private String serializeState() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(bird1Y).append('|').append(bird1Tilt).append('|').append(flap1Anim)
+          .append('|').append(score).append('|').append(over ? 1 : 0).append('|')
+          .append(paused ? 1 : 0).append('|').append(begun ? 1 : 0).append('|');
+        sb.append("S:");
+        for (int i = 0; i < spikes.size(); i++) {
+            Spike s = spikes.get(i);
+            if (i > 0) sb.append(';');
+            sb.append(s.x).append(',').append(s.y).append(',').append(s.w).append(',')
+              .append(s.h).append(',').append(s.type).append(',').append(s.rot);
+        }
+        sb.append("|R:");
+        for (int i = 0; i < rewards.size(); i++) {
+            Reward rw = rewards.get(i);
+            if (i > 0) sb.append(';');
+            sb.append(rw.x).append(',').append(rw.y).append(',').append(rw.w).append(',')
+              .append(rw.h).append(',').append(rw.type).append(',').append(rw.bob);
+        }
+        return sb.toString();
+    }
+
+    /** 反序列化主机状态到本地镜像 */
+    private void deserializeState(String data) {
+        String[] parts = data.split("\\|", -1);
+        if (parts.length < 8) return;
+        try {
+            bird1Y = Integer.parseInt(parts[0].trim());
+            bird1Tilt = Double.parseDouble(parts[1].trim());
+            flap1Anim = Integer.parseInt(parts[2].trim());
+            score = Integer.parseInt(parts[3].trim());
+            over = "1".equals(parts[4].trim());
+            paused = "1".equals(parts[5].trim());
+            begun = "1".equals(parts[6].trim());
+        } catch (Exception e) { return; }
+        // 障碍列表
+        spikes.clear();
+        if (parts.length > 7 && parts[7].startsWith("S:")) {
+            String spData = parts[7].substring(2);
+            if (!spData.isEmpty()) {
+                for (String sp : spData.split(";")) {
+                    String[] f = sp.split(",", -1);
+                    if (f.length >= 6) {
+                        try {
+                            Spike s = new Spike(0, 0, 0, 0, 0, Integer.parseInt(f[4].trim()));
+                            s.x = Integer.parseInt(f[0].trim());
+                            s.y = Integer.parseInt(f[1].trim());
+                            s.w = Integer.parseInt(f[2].trim());
+                            s.h = Integer.parseInt(f[3].trim());
+                            s.rot = Double.parseDouble(f[5].trim());
+                            spikes.add(s);
+                        } catch (Exception e) { }
+                    }
+                }
+            }
+        }
+        // 奖励列表
+        rewards.clear();
+        if (parts.length > 8 && parts[8].startsWith("R:")) {
+            String rwData = parts[8].substring(2);
+            if (!rwData.isEmpty()) {
+                for (String rp : rwData.split(";")) {
+                    String[] f = rp.split(",", -1);
+                    if (f.length >= 6) {
+                        try {
+                            Reward rw = new Reward(0, 0, 0, 0, 0, Integer.parseInt(f[4].trim()));
+                            rw.x = Integer.parseInt(f[0].trim());
+                            rw.y = Integer.parseInt(f[1].trim());
+                            rw.w = Integer.parseInt(f[2].trim());
+                            rw.h = Integer.parseInt(f[3].trim());
+                            rw.bob = Double.parseDouble(f[5].trim());
+                            rewards.add(rw);
+                        } catch (Exception e) { }
+                    }
+                }
+            }
+        }
     }
 
     // ==================== 游戏画面 ====================
@@ -635,7 +880,14 @@ public class BirdGame extends JFrame {
             addMouseListener(new MouseAdapter() {
                 @Override public void mouseClicked(MouseEvent e) {
                     requestFocusInWindow();
-                    if (!begun && !over) { begun = true; SoundManager.sfxGameStart(); }
+                    if (!begun && !over) {
+                        if (online && myPlayer == 2 && netPlay != null) {
+                            netPlay.sendOp("BIRDSTART");
+                        } else if (!online || myPlayer == 1) {
+                            begun = true; SoundManager.sfxGameStart();
+                            if (online) sendStateIfOnline();
+                        }
+                    }
                 }
             });
         }
@@ -818,9 +1070,13 @@ public class BirdGame extends JFrame {
             g2.drawString(s, GW / 2 - fm.stringWidth(s) / 2, GH / 2 - 20);
             g2.setFont(new Font("微软雅黑", Font.PLAIN, 15));
             g2.setColor(SUB);
-            s = versusMode
-                    ? "玩家1按 F 上 J 下  ·  玩家2按 ↑ 上 ↓ 下  ·  躲避陨石飞碟星球  ·  吃金珠金币钱袋加分"
-                    : "玩家1按 F 上升  ·  玩家2按 ↓ 下降  ·  躲避陨石飞碟星球  ·  吃金珠金币钱袋加分";
+            s = online
+                    ? (myPlayer == 1 ? "你是玩家1：按 F 上升  ·  对方按 ↓ 下降  ·  默契配合躲避障碍"
+                       : myPlayer == 2 ? "你是玩家2：按 ↓ 下降  ·  对方按 F 上升  ·  默契配合躲避障碍"
+                       : "观战中  ·  玩家1按 F 上升  ·  玩家2按 ↓ 下降")
+                    : (versusMode
+                       ? "玩家1按 F 上 J 下  ·  玩家2按 ↑ 上 ↓ 下  ·  躲避陨石飞碟星球  ·  吃金珠金币钱袋加分"
+                       : "玩家1按 F 上升  ·  玩家2按 ↓ 下降  ·  躲避陨石飞碟星球  ·  吃金珠金币钱袋加分");
             fm = g2.getFontMetrics();
             g2.drawString(s, GW / 2 - fm.stringWidth(s) / 2, GH / 2 + 22);
         }

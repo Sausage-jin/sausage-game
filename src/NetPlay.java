@@ -37,12 +37,12 @@ public class NetPlay {
     private List<String> clientNicks = new ArrayList<String>();
     private List<Integer> clientAvatars = new ArrayList<Integer>();
     private List<Integer> clientGenders = new ArrayList<Integer>();
+    private List<Boolean> clientIsSpec = new ArrayList<Boolean>();  // 每个玩家客户端是否为观众角色（房间内切换）
 
     // 人机玩家（主机端虚拟，不占网络连接）
     private List<String> botNicks = new ArrayList<String>();
     private List<Integer> botAvatars = new ArrayList<Integer>();
     private List<Integer> botGenders = new ArrayList<Integer>();
-
     // 观众（主机端）
     private List<Socket> specSockets = new ArrayList<Socket>();
     private List<PrintWriter> specOuts = new ArrayList<PrintWriter>();
@@ -60,10 +60,11 @@ public class NetPlay {
     private int myAvatar = 0;                   // 自己的头像索引(0-5)
     private int myGender = 0;                   // 自己的性别(0-4)
     private boolean spectator = false;          // 自己是否观众（客户端）
-    private String[] remoteNicks = new String[4]; // 客户端收到的各玩家昵称(1/2/3)
-    private int[] remoteAvatars = new int[4];   // 客户端收到的各玩家头像(1/2/3)
-    private int[] remoteGenders = new int[4];   // 客户端收到的各玩家性别(1/2/3)
+    private String[] remoteNicks = new String[5]; // 客户端收到的各玩家昵称(1/2/3/4)
+    private int[] remoteAvatars = new int[5];   // 客户端收到的各玩家头像(1/2/3/4)
+    private int[] remoteGenders = new int[5];   // 客户端收到的各玩家性别(1/2/3/4)
     private int spectatorCount = 0;             // 客户端收到的观众人数
+    private boolean roleIsSpec = false;         // 客户端当前是否为观众角色（房间内切换）
 
     private NetListener listener;
     private boolean isHost;
@@ -86,49 +87,61 @@ public class NetPlay {
     /** 自己是否观众 */
     public boolean isSpectator() { return spectator; }
 
-    /** 获取指定玩家的昵称（联机时，1=主机/黑方 2=白方 3=绿方），可能为null */
+    /** 获取指定玩家的昵称（联机时，1=主机 2/3/4=客户端），可能为null */
     public String getPlayerNick(int player) {
         if (isHost) {
             if (player == 1) return myNick;
-            if (player == 2) return clientNicks.size() > 0 ? clientNicks.get(0) : null;
-            if (player == 3) return clientNicks.size() > 1 ? clientNicks.get(1) : null;
+            List<Integer> pi = getPlayerClientIndices();
+            if (player >= 2 && player - 2 < pi.size()) return clientNicks.get(pi.get(player - 2));
             return null;
         }
-        if (player >= 1 && player <= 3) return remoteNicks[player];
+        if (player >= 1 && player <= 4) return remoteNicks[player];
         return null;
     }
 
-    /** 获取观众人数（主机动态计算，客户端取缓存值） */
+    /** 获取观众人数（主机动态计算含观众角色客户端，客户端取缓存值） */
     public int getSpectatorCount() {
-        if (isHost) return aliveSpectators();
+        if (isHost) return aliveSpectators() + countSpecRoleClients();
         return spectatorCount;
     }
 
-    /** 获取指定玩家的头像索引（1=主机 2=白方 3=绿方） */
+    /** 主机：统计观众角色的玩家客户端数量（连接存活） */
+    private int countSpecRoleClients() {
+        int n = 0;
+        for (int i = 0; i < clientIsSpec.size(); i++) {
+            if (clientIsSpec.get(i) && i < multiSockets.size()) {
+                Socket s = multiSockets.get(i);
+                if (s != null && !s.isClosed()) n++;
+            }
+        }
+        return n;
+    }
+
+    /** 获取指定玩家的头像索引（1=主机 2/3/4=客户端） */
     public int getPlayerAvatar(int player) {
         if (isHost) {
             if (player == 1) return myAvatar;
-            if (player == 2) return clientAvatars.size() > 0 ? clientAvatars.get(0) : 0;
-            if (player == 3) return clientAvatars.size() > 1 ? clientAvatars.get(1) : 0;
+            List<Integer> pi = getPlayerClientIndices();
+            if (player >= 2 && player - 2 < pi.size()) return clientAvatars.get(pi.get(player - 2));
             return 0;
         }
-        if (player >= 1 && player <= 3) return remoteAvatars[player];
+        if (player >= 1 && player <= 4) return remoteAvatars[player];
         return 0;
     }
 
-    /** 获取指定玩家的性别（1=主机 2=白方 3=绿方） */
+    /** 获取指定玩家的性别（1=主机 2/3/4=客户端） */
     public int getPlayerGender(int player) {
         if (isHost) {
             if (player == 1) return myGender;
-            if (player == 2) return clientGenders.size() > 0 ? clientGenders.get(0) : 0;
-            if (player == 3) return clientGenders.size() > 1 ? clientGenders.get(1) : 0;
+            List<Integer> pi = getPlayerClientIndices();
+            if (player >= 2 && player - 2 < pi.size()) return clientGenders.get(pi.get(player - 2));
             return 0;
         }
-        if (player >= 1 && player <= 3) return remoteGenders[player];
+        if (player >= 1 && player <= 4) return remoteGenders[player];
         return 0;
     }
 
-    /** 主机：获取存活观众信息列表，每项为 String[]{昵称, 头像, 性别} */
+    /** 主机：获取存活观众信息列表（含观众角色客户端），每项为 String[]{昵称, 头像, 性别} */
     public List<String[]> getSpectatorInfos() {
         List<String[]> list = new ArrayList<String[]>();
         for (int i = 0; i < specSockets.size(); i++) {
@@ -137,6 +150,17 @@ public class NetPlay {
                 list.add(new String[]{ specNicks.get(i),
                         String.valueOf(specAvatars.get(i)),
                         String.valueOf(specGenders.get(i)) });
+            }
+        }
+        // 观众角色的玩家客户端
+        for (int i = 0; i < clientIsSpec.size(); i++) {
+            if (clientIsSpec.get(i) && i < multiSockets.size()) {
+                Socket s = multiSockets.get(i);
+                if (s != null && !s.isClosed()) {
+                    list.add(new String[]{ clientNicks.get(i),
+                            String.valueOf(clientAvatars.get(i)),
+                            String.valueOf(clientGenders.get(i)) });
+                }
             }
         }
         return list;
@@ -211,6 +235,7 @@ public class NetPlay {
                 clientNicks.add(nick);
                 clientAvatars.add(av);
                 clientGenders.add(gd);
+                clientIsSpec.add(false);
                 final int idx = multiSockets.size() - 1;
                 startMultiReceive(br, idx);
                 connectedClients++;
@@ -264,9 +289,21 @@ public class NetPlay {
                 try {
                     String line;
                     while (running && (line = br.readLine()) != null) {
-                        if (line.startsWith("OP:DDZ_")) {
+                        if (line.startsWith("OP:DDZ_") || line.startsWith("OP:DDZ4_")) {
                             // 斗地主操作仅主机处理，不转发（防作弊）
-                        } else if (line.startsWith("OP:") || line.startsWith("CH:")) {
+                        } else if (line.startsWith("OP:TO_SPEC")) {
+                            setClientSpectator(idx);
+                        } else if (line.startsWith("OP:TO_PLAYER")) {
+                            setClientPlayer(idx);
+                        } else if (line.startsWith("OP:")) {
+                            // 观众角色的客户端不转发游戏操作
+                            if (!isClientSpec(idx)) {
+                                for (int i = 0; i < multiOuts.size(); i++) {
+                                    if (i != idx) multiOuts.get(i).println(line);
+                                }
+                                for (PrintWriter pw : specOuts) pw.println(line);
+                            }
+                        } else if (line.startsWith("CH:")) {
                             for (int i = 0; i < multiOuts.size(); i++) {
                                 if (i != idx) multiOuts.get(i).println(line);
                             }
@@ -307,7 +344,7 @@ public class NetPlay {
         }).start();
     }
 
-    /** 解析协议消息并回调监听器（EDT线程），截获NICKS/SPEC更新本地缓存 */
+    /** 解析协议消息并回调监听器（EDT线程），截获NICKS/SPEC/ROLE更新本地缓存 */
     private void dispatch(String msg) {
         if (msg.startsWith("ST:")) {
             final String body = msg.substring(3);
@@ -315,6 +352,10 @@ public class NetPlay {
                 parseNicks(body.substring(6));
             } else if (body.startsWith("SPEC:")) {
                 try { spectatorCount = Integer.parseInt(body.substring(5).trim()); } catch (Exception e) { }
+            } else if (body.startsWith("ROLE:")) {
+                String role = body.substring(5).trim();
+                if ("SPEC".equals(role)) roleIsSpec = true;
+                else if ("PLAYER".equals(role)) roleIsSpec = false;
             }
             SwingUtilities.invokeLater(new Runnable() {
                 public void run() { if (listener != null) listener.onStateReceived(body); }
@@ -332,10 +373,10 @@ public class NetPlay {
         }
     }
 
-    /** 解析 NICKS 数据：每槽位格式 昵称,头像,性别，槽位间以|分隔 */
+    /** 解析 NICKS 数据：每槽位格式 昵称,头像,性别，槽位间以|分隔（4个玩家槽位） */
     private void parseNicks(String data) {
         String[] parts = data.split("\\|", -1);
-        for (int i = 0; i < parts.length && i < 3; i++) {
+        for (int i = 0; i < parts.length && i < 4; i++) {
             String p = parts[i];
             if (p.isEmpty()) { remoteNicks[i + 1] = null; continue; }
             String[] f = p.split(",", -1);
@@ -366,9 +407,9 @@ public class NetPlay {
         }
     }
 
-    /** 主机：添加一个人机玩家（昵称"电脑N"，性别4=非人），返回人机序号（0起）；满2个返回-1 */
+    /** 主机：添加一个人机玩家（昵称"电脑N"，性别4=非人），返回人机序号（0起）；满3个返回-1 */
     public synchronized int addBot() {
-        if (!isHost || botNicks.size() >= 2) return -1;
+        if (!isHost || botNicks.size() >= 3) return -1;
         int n = botNicks.size() + 1;
         botNicks.add("电脑" + n);
         botAvatars.add(0);
@@ -401,52 +442,44 @@ public class NetPlay {
         return idx >= 0 && idx < botGenders.size() ? botGenders.get(idx) : 0;
     }
 
-    /** 主机：判断玩家槽位（2或3）是否由人机占据（与 broadcastRoomInfo 填充逻辑一致） */
+    /** 主机：判断玩家槽位（2/3/4）是否由人机占据（与 broadcastRoomInfo 填充逻辑一致） */
     public synchronized boolean isSeatBot(int seat) {
         if (!isHost) return false;
-        int connected = clientNicks.size();
+        int eff = getEffectivePlayerCount();
         int bots = botNicks.size();
         int botUsed = 0;
-        // 槽位2
-        boolean s2bot = false;
-        if (connected == 0 && botUsed < bots) { s2bot = true; botUsed++; }
-        // 槽位3
-        boolean s3bot = false;
-        if (connected < 2 && botUsed < bots) { s3bot = true; botUsed++; }
+        boolean s2bot = false, s3bot = false, s4bot = false;
+        if (eff < 1 && botUsed < bots) { s2bot = true; botUsed++; }
+        if (eff < 2 && botUsed < bots) { s3bot = true; botUsed++; }
+        if (eff < 3 && botUsed < bots) { s4bot = true; botUsed++; }
         if (seat == 2) return s2bot;
         if (seat == 3) return s3bot;
+        if (seat == 4) return s4bot;
         return false;
     }
 
     /** 主机：广播房间信息（玩家昵称/头像/性别+观众数）给所有玩家和观众。
-     *  格式 ST:NICKS:昵称,头像,性别|昵称,头像,性别|昵称,头像,性别（3个玩家槽位）
-     *  槽位2/3 优先填真人客户端，空位用人机填充 */
+     *  格式 ST:NICKS:昵称,头像,性别|...（4个玩家槽位：主机+3个客户端/人机槽位）
+     *  槽位2/3/4 优先填非观众真人客户端，空位用人机填充 */
     public synchronized void broadcastRoomInfo() {
         if (!isHost) return;
         String p1 = myNick + "," + myAvatar + "," + myGender;
-        // 人机按顺序填充未被真人客户端占据的槽位
+        // 非观众客户端按顺序占据槽位，剩余槽位用人机填充
+        List<Integer> pi = getPlayerClientIndices();
         int botUsed = 0;
-        // 槽位2：真人客户端0 或 人机
-        String p2;
-        if (clientNicks.size() > 0) {
-            p2 = clientNicks.get(0) + "," + clientAvatars.get(0) + "," + clientGenders.get(0);
-        } else if (botUsed < botNicks.size()) {
-            p2 = botNicks.get(botUsed) + "," + botAvatars.get(botUsed) + "," + botGenders.get(botUsed);
-            botUsed++;
-        } else {
-            p2 = "";
+        String[] slots = new String[3];
+        for (int s = 0; s < 3; s++) {
+            if (s < pi.size()) {
+                int ci = pi.get(s);
+                slots[s] = clientNicks.get(ci) + "," + clientAvatars.get(ci) + "," + clientGenders.get(ci);
+            } else if (botUsed < botNicks.size()) {
+                slots[s] = botNicks.get(botUsed) + "," + botAvatars.get(botUsed) + "," + botGenders.get(botUsed);
+                botUsed++;
+            } else {
+                slots[s] = "";
+            }
         }
-        // 槽位3：真人客户端1 或 人机
-        String p3;
-        if (clientNicks.size() > 1) {
-            p3 = clientNicks.get(1) + "," + clientAvatars.get(1) + "," + clientGenders.get(1);
-        } else if (botUsed < botNicks.size()) {
-            p3 = botNicks.get(botUsed) + "," + botAvatars.get(botUsed) + "," + botGenders.get(botUsed);
-            botUsed++;
-        } else {
-            p3 = "";
-        }
-        String msg = "ST:NICKS:" + p1 + "|" + p2 + "|" + p3;
+        String msg = "ST:NICKS:" + p1 + "|" + slots[0] + "|" + slots[1] + "|" + slots[2];
         for (PrintWriter pw : multiOuts) pw.println(msg);
         for (PrintWriter pw : specOuts) pw.println(msg);
         String specMsg = "ST:SPEC:" + aliveSpectators();
@@ -456,6 +489,66 @@ public class NetPlay {
 
     /** 获取已连接的玩家客户端数量（多客户端主机模式） */
     public int getConnectedClients() { return connectedClients; }
+
+    /** 主机：获取非观众角色且连接存活的客户端索引列表（按连接顺序） */
+    public synchronized List<Integer> getPlayerClientIndices() {
+        List<Integer> list = new ArrayList<Integer>();
+        for (int i = 0; i < clientIsSpec.size(); i++) {
+            if (!clientIsSpec.get(i) && i < multiSockets.size()) {
+                Socket s = multiSockets.get(i);
+                if (s != null && !s.isClosed()) list.add(i);
+            }
+        }
+        return list;
+    }
+
+    /** 主机：非观众角色的有效玩家客户端数量 */
+    public int getEffectivePlayerCount() { return getPlayerClientIndices().size(); }
+
+    /** 主机：获取指定座位（1/2/3）对应的客户端连接索引（座位=玩家号-1） */
+    public synchronized int getClientIndexForSeat(int seat) {
+        List<Integer> pi = getPlayerClientIndices();
+        if (seat >= 1 && seat <= pi.size()) return pi.get(seat - 1);
+        return -1;
+    }
+
+    /** 主机：判断某客户端是否为观众角色 */
+    private boolean isClientSpec(int idx) {
+        return idx >= 0 && idx < clientIsSpec.size() && clientIsSpec.get(idx);
+    }
+
+    /** 主机：将玩家客户端切换为观众角色 */
+    public synchronized void setClientSpectator(int idx) {
+        if (!isHost || idx < 0 || idx >= clientIsSpec.size() || clientIsSpec.get(idx)) return;
+        clientIsSpec.set(idx, true);
+        sendToClient(idx, "ST:ROLE:SPEC");
+        broadcastRoomInfo();
+        notifySpectatorChanged();
+        notifyConnected();
+    }
+
+    /** 主机：将观众角色客户端切换回玩家（槽位满则通知FULL） */
+    public synchronized void setClientPlayer(int idx) {
+        if (!isHost || idx < 0 || idx >= clientIsSpec.size() || !clientIsSpec.get(idx)) return;
+        if (getEffectivePlayerCount() >= expectedClients) {
+            sendToClient(idx, "ST:ROLE:FULL");
+            return;
+        }
+        clientIsSpec.set(idx, false);
+        sendToClient(idx, "ST:ROLE:PLAYER");
+        broadcastRoomInfo();
+        notifySpectatorChanged();
+        notifyConnected();
+    }
+
+    /** 客户端：请求切换为观众 */
+    public void requestSpectator() { send("OP:TO_SPEC"); }
+
+    /** 客户端：请求切换回玩家 */
+    public void requestPlayer() { send("OP:TO_PLAYER"); }
+
+    /** 客户端：当前是否为观众角色（房间内切换后更新） */
+    public boolean isRoleSpectator() { return roleIsSpec; }
 
     private int aliveSpectators() {
         int n = 0;
