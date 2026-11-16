@@ -592,49 +592,59 @@ public class HomeUI extends JFrame {
     }
 
     private void startLocal() {
-        String[] opts = {"烂头背枪（双人）", "烂头背枪（人机）", "五子棋（双人）", "五子棋（人机）", "五子棋（三人）", "双人俄罗斯方块", "你画我猜", "小鸟飞翔", "斗地主", "取消"};
+        String[] opts = {"烂头背枪", "五子棋", "双人俄罗斯方块", "你画我猜", "小鸟飞翔", "斗地主", "取消"};
         int c = showVerticalOptions("开始游戏", "选择游戏模式", opts);
         if (c == 0) {
-            GameUI gui = new GameUI();
-            gui.setVisible(true);
-            dispose();
-        } else if (c == 1) {
-            GameUI gui = new GameUI(true);
-            gui.setVisible(true);
-            dispose();
-        } else if (c == 2) {
-            GomokuUI gui = new GomokuUI(2);
-            gui.setVisible(true);
-            dispose();
-        } else if (c == 3) {
-            GomokuUI gui = new GomokuUI(2, new int[]{2});
-            gui.setVisible(true);
-            dispose();
-        } else if (c == 4) {
-            String[] sub = {"1人（对战2台电脑）", "2人（对战1台电脑）", "3人（纯本地）", "取消"};
-            int sc = showVerticalOptions("五子棋（三人）", "几人参与？", sub);
+            // 烂头背枪：选择双人/人机
+            String[] sub = {"双人", "人机", "取消"};
+            int sc = showVerticalOptions("烂头背枪", "选择模式", sub);
             if (sc == 0) {
-                GomokuUI gui = new GomokuUI(3, new int[]{2, 3});
+                GameUI gui = new GameUI();
                 gui.setVisible(true);
                 dispose();
             } else if (sc == 1) {
-                GomokuUI gui = new GomokuUI(3, new int[]{3});
-                gui.setVisible(true);
-                dispose();
-            } else if (sc == 2) {
-                GomokuUI gui = new GomokuUI(3);
+                GameUI gui = new GameUI(true);
                 gui.setVisible(true);
                 dispose();
             }
-        } else if (c == 5) {
+        } else if (c == 1) {
+            // 五子棋：选择双人/人机/三人
+            String[] sub = {"双人", "人机", "三人", "取消"};
+            int sc = showVerticalOptions("五子棋", "选择模式", sub);
+            if (sc == 0) {
+                GomokuUI gui = new GomokuUI(2);
+                gui.setVisible(true);
+                dispose();
+            } else if (sc == 1) {
+                GomokuUI gui = new GomokuUI(2, new int[]{2});
+                gui.setVisible(true);
+                dispose();
+            } else if (sc == 2) {
+                String[] sub3 = {"1人（对战2台电脑）", "2人（对战1台电脑）", "3人（纯本地）", "取消"};
+                int sc3 = showVerticalOptions("五子棋（三人）", "几人参与？", sub3);
+                if (sc3 == 0) {
+                    GomokuUI gui = new GomokuUI(3, new int[]{2, 3});
+                    gui.setVisible(true);
+                    dispose();
+                } else if (sc3 == 1) {
+                    GomokuUI gui = new GomokuUI(3, new int[]{3});
+                    gui.setVisible(true);
+                    dispose();
+                } else if (sc3 == 2) {
+                    GomokuUI gui = new GomokuUI(3);
+                    gui.setVisible(true);
+                    dispose();
+                }
+            }
+        } else if (c == 2) {
             TetrisUI gui = new TetrisUI();
             gui.setVisible(true);
             dispose();
-        } else if (c == 6) {
+        } else if (c == 3) {
             DrawGuessUI gui = new DrawGuessUI();
             gui.setVisible(true);
             dispose();
-        } else if (c == 7) {
+        } else if (c == 4) {
             String[] sub = {"双人合作（共控一鸟）", "双人双鸟（各自一鸟）", "取消"};
             int sc = showVerticalOptions("小鸟飞翔", "选择模式", sub);
             if (sc == 0) {
@@ -646,7 +656,7 @@ public class HomeUI extends JFrame {
                 gui.setVisible(true);
                 dispose();
             }
-        } else if (c == 8) {
+        } else if (c == 5) {
             String[] sub = {"单人对战（3人AI）", "四人对战（2v2组队）", "取消"};
             int sc = showVerticalOptions("斗地主", "选择模式", sub);
             if (sc == 0 || sc == 1) {
