@@ -1,0 +1,37 @@
+# ===== Build outputs =====
+bin/
+dist/
+pkg/
+*.class
+*.jar
+*.war
+
+# ===== Bundled JRE (users should install their own JDK 11+) =====
+runtime/
+
+# ===== Unused media =====
+# mp3 files are source originals; the game only loads .wav
+music/*.mp3
+# intro video is not referenced by any code
+vedio/
+
+# ===== IDE / editor data =====
+.joycode/
+.workbuddy/
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+nbproject/private/
+
+# ===== OS files =====
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+*~
+
+# ===== Runtime user settings (regenerated on first launch) =====
+settings.properties
