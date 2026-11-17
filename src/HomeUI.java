@@ -109,6 +109,14 @@ public class HomeUI extends JFrame {
         btns[3].addActionListener(e -> System.exit(0));
 
         // 右下角：昵称 + 音乐开关 + 设置
+        JPanel south = new JPanel(new BorderLayout());
+        south.setOpaque(false);
+        JLabel copyrightLb = new JLabel("© 2026 Sausage-jin · 仅供非商业使用 · 玩法受保护");
+        copyrightLb.setFont(new Font("微软雅黑", Font.PLAIN, 11));
+        copyrightLb.setForeground(new Color(140, 140, 150));
+        copyrightLb.setBorder(BorderFactory.createEmptyBorder(0, 14, 0, 0));
+        south.add(copyrightLb, BorderLayout.WEST);
+
         JPanel corner = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
         corner.setOpaque(false);
         nickBtn = mkIconBtn(loadIcon("image/user.png", 30), "昵称");
@@ -117,7 +125,8 @@ public class HomeUI extends JFrame {
         corner.add(nickBtn);
         corner.add(musicBtn);
         corner.add(settingBtn);
-        bg.add(corner, BorderLayout.SOUTH);
+        south.add(corner, BorderLayout.EAST);
+        bg.add(south, BorderLayout.SOUTH);
 
         updateMusicBtn();
         musicBtn.addActionListener(e -> toggleMusic());

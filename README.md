@@ -102,7 +102,9 @@ java -jar game.jar
 
 ### License
 
-Released under the [MIT License](LICENSE).
+Released under a **Non-Commercial License** — see [LICENSE](LICENSE).
+
+> ⚠️ This project (including source code, art assets, sound effects, UI design, and **gameplay/rules**) is licensed for **non-commercial use only**. Selling, monetizing, or using the same gameplay in commercial products without written permission from the author is strictly prohibited.
 
 ---
 
@@ -202,4 +204,6 @@ java -jar game.jar
 
 ### 开源协议
 
-本项目基于 [MIT 协议](LICENSE) 开源。
+本项目基于[非商业使用许可协议](LICENSE)开源。
+
+> ⚠️ 本项目（含源代码、美术资源、音效、界面设计及**游戏玩法/规则**）仅供**非商业用途**使用。未经作者书面许可，严禁出售、盈利，或将相同玩法用于商业产品。

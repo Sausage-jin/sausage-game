@@ -1,21 +1,43 @@
-MIT License
+烂头背枪（LanTouBeiQiang）非商业使用许可协议
 
-Copyright (c) 2026 LanTouBeiQiang Contributors
+Copyright (c) 2026 Sausage-jin（烂头背枪作者）。保留所有权利。
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+第一条 授权范围
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+在遵守本协议的前提下，任何人可以免费：
+1. 使用、运行本软件及其全部游戏内容；
+2. 学习、研究、修改本软件源代码；
+3. 将修改后的版本用于个人非商业目的；
+4. 在非商业前提下分享、传播本软件（须保留本协议全文及原作者声明）。
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+第二条 禁止商业使用
+
+1. 未经原作者书面许可，严禁将本软件（含源代码、美术资源、音效、
+   界面设计及任何衍生作品）用于任何商业目的。
+2. 商业目的包括但不限于：出售、出租、订阅收费、内购付费、
+   广告盈利、商业推广、商业培训、付费下载等直接或间接获取经济
+   利益的行为。
+3. 【玩法保护】本软件所包含的独创玩法与规则（包括但不限于"烂头
+   背枪"翻牌策略对战的游戏规则、卡牌克制关系、组合升级机制等）
+   同样受本协议保护。严禁未经许可将相同或实质性相似的玩法用于
+   商业产品，无论是否使用本软件的代码或资源。
+
+第三条 署名要求
+
+任何再分发、修改或引用本软件的行为，必须：
+1. 保留原作者署名：Sausage-jin / 烂头背枪；
+2. 保留本协议全文；
+3. 注明修改内容（如有）。
+
+第四条 免责声明
+
+本软件按"现状"提供，不作任何明示或暗示的保证。在任何情况下，
+原作者不对因使用本软件而产生的任何直接或间接损失承担责任。
+
+第五条 违约与授权
+
+如需将本软件或其玩法用于商业目的，必须事先获得原作者的书面
+商业授权。可通过 GitHub（https://github.com/Sausage-jin/sausage-game）
+联系作者协商授权事宜。
+
+违反本协议的任何商业使用行为，原作者保留追究法律责任的权利。
