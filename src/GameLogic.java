@@ -23,6 +23,7 @@ public class GameLogic {
     private boolean gameOver;
     private int winner;          // 0=平局, 1或2=获胜玩家
     private String lastAction;
+    private String lastErrorHint = null;  // 小开错误提示（null=无）
 
     /** 连续交换检查：同一烂头不能连续两回合与巨石交换 */
     private int lastSwapPlayer = 0;
@@ -39,6 +40,57 @@ public class GameLogic {
         KILL_MAP.put(CardType.MIFENG, EnumSet.of(CardType.LANTOU, CardType.LANTOUBEIQIANG));
     }
 
+    /** 错误提示映射：进攻方→目标→提示文案（战斗牌对战错误26条+攻击中立可吃牌错误12条） */
+    private static final Map<CardType, Map<CardType, String>> ERR_HINT =
+            new HashMap<CardType, Map<CardType, String>>();
+    static {
+        // ---- 战斗牌对战错误（双方都无法击杀对方，26条）----
+        putHint(CardType.LANTOU, CardType.LANTOU, "烂头没有枪");
+        putHint(CardType.LANTOU, CardType.XIAOHAI, "这是未成年");
+        putHint(CardType.LANTOU, CardType.GONGJI, "烂头追不上鸡");
+        putHint(CardType.LANTOU, CardType.BUCHONGXIAOHAI, "这是未成年");
+        putHint(CardType.SHARENHU, CardType.SHARENHU, "杀人虎只爱杀人");
+        putHint(CardType.SHARENHU, CardType.GONGJI, "杀人虎只爱杀人");
+        putHint(CardType.SHARENHU, CardType.MIFENG, "杀人虎只爱杀人");
+        putHint(CardType.XIAOHAI, CardType.LANTOU, "喝大了");
+        putHint(CardType.XIAOHAI, CardType.XIAOHAI, "小朋友不可以哦");
+        putHint(CardType.XIAOHAI, CardType.MIFENG, "小孩只爱逗公鸡");
+        putHint(CardType.XIAOHAI, CardType.LANTOUBEIQIANG, "喝大了");
+        putHint(CardType.XIAOHAI, CardType.BUCHONGXIAOHAI, "小朋友不可以哦");
+        putHint(CardType.GONGJI, CardType.LANTOU, "？你想干嘛");
+        putHint(CardType.GONGJI, CardType.SHARENHU, "？你想干嘛");
+        putHint(CardType.GONGJI, CardType.GONGJI, "公鸡只爱啄母鸡");
+        putHint(CardType.GONGJI, CardType.LANTOUBEIQIANG, "？你想干嘛");
+        putHint(CardType.MIFENG, CardType.SHARENHU, "皮太厚扎不进去");
+        putHint(CardType.MIFENG, CardType.XIAOHAI, "蜜蜂很喜欢小孩");
+        putHint(CardType.MIFENG, CardType.MIFENG, "本事同根生");
+        putHint(CardType.LANTOUBEIQIANG, CardType.XIAOHAI, "这是未成年");
+        putHint(CardType.LANTOUBEIQIANG, CardType.GONGJI, "打不准");
+        putHint(CardType.LANTOUBEIQIANG, CardType.BUCHONGXIAOHAI, "这是未成年");
+        putHint(CardType.BUCHONGXIAOHAI, CardType.LANTOU, "喝大了");
+        putHint(CardType.BUCHONGXIAOHAI, CardType.XIAOHAI, "打架是不对的");
+        putHint(CardType.BUCHONGXIAOHAI, CardType.LANTOUBEIQIANG, "棍打枪");
+        putHint(CardType.BUCHONGXIAOHAI, CardType.BUCHONGXIAOHAI, "小朋友不可以哦");
+        // ---- 攻击中立可吃牌错误（猫咪/旺财，12条）----
+        putHint(CardType.LANTOU, CardType.MAOMI, "咪咪可爱捏（没有枪）");
+        putHint(CardType.LANTOU, CardType.WANGCAI, "大狗需要看主人（没有枪）");
+        putHint(CardType.SHARENHU, CardType.MAOMI, "杀人虎只爱杀人（中立牌是猫咪）");
+        putHint(CardType.SHARENHU, CardType.WANGCAI, "杀人虎只爱杀人（中立牌是旺财）");
+        putHint(CardType.XIAOHAI, CardType.MAOMI, "小孩和咪咪是朋友");
+        putHint(CardType.XIAOHAI, CardType.WANGCAI, "旺财是小孩的");
+        putHint(CardType.GONGJI, CardType.MAOMI, "公鸡打猫咪?");
+        putHint(CardType.GONGJI, CardType.WANGCAI, "这波喂嘴里了");
+        putHint(CardType.MIFENG, CardType.MAOMI, "蜜蜂和猫咪是朋友");
+        putHint(CardType.MIFENG, CardType.WANGCAI, "蜜蜂和旺财是朋友");
+        putHint(CardType.BUCHONGXIAOHAI, CardType.MAOMI, "小孩和咪咪是朋友");
+        putHint(CardType.BUCHONGXIAOHAI, CardType.WANGCAI, "旺财是小孩的");
+    }
+    private static void putHint(CardType att, CardType def, String hint) {
+        Map<CardType, String> m = ERR_HINT.get(att);
+        if (m == null) { m = new HashMap<CardType, String>(); ERR_HINT.put(att, m); }
+        m.put(def, hint);
+    }
+
     public GameLogic() {
         reset();
     }
@@ -50,6 +102,7 @@ public class GameLogic {
         gameOver = false;
         winner = 0;
         lastSwapPlayer = 0; lastSwapRow = -1; lastSwapCol = -1;
+        lastErrorHint = null;
         lastAction = "红方先手，点暗牌翻开或己方/中立明牌行动";
 
         List<Card> all = new ArrayList<Card>();
@@ -93,6 +146,8 @@ public class GameLogic {
     public boolean isGameOver() { return gameOver; }
     public int getWinner() { return winner; }
     public String getLastAction() { return lastAction; }
+    public String getLastErrorHint() { return lastErrorHint; }
+    public void clearLastErrorHint() { lastErrorHint = null; }
 
     /** 统计某玩家存活卡牌数（中立牌不计入） */
     public int countAlive(int player) {
@@ -146,6 +201,7 @@ public class GameLogic {
                 && (card.getType() == CardType.LANTOU || card.getType() == CardType.LANTOUBEIQIANG)) {
             // 烂头/烂头背枪 与巨石交换位置（巨石需已翻开）
             if (currentPlayer == lastSwapPlayer && fromRow == lastSwapRow && fromCol == lastSwapCol) {
+                lastErrorHint = "同一个烂头不能连续两回合与巨石交换";
                 return false; // 不能连续交换
             }
             board[fromRow][fromCol] = target;  // 巨石移到烂头原位
@@ -156,18 +212,20 @@ public class GameLogic {
             lastAction = playerName(currentPlayer) + card.getType().getName() + "与巨石交换位置";
         } else if (target.getOwner() == 0) {
             // 目标为其他中立牌（需已翻开）：仅当可击杀时允许
-            if (!target.isFaceUp() || !canKill(card.getType(), target.getType())) return false;
+            if (!target.isFaceUp()) {
+                lastErrorHint = "中立牌未翻开，不能行动";
+                return false;
+            }
+            if (!canKill(card.getType(), target.getType())) {
+                lastErrorHint = getNeutralErrHint(card.getType(), target.getType());
+                return false;
+            }
             board[toRow][toCol] = card;
             board[fromRow][fromCol] = null;
             lastAction = card.getType().getName() + " 击杀 " + target.getType().getName();
             clearSwapIfMine();
         } else {
-            // 敌方牌 → 对战（暗牌翻开应战）
-            StringBuilder sb = new StringBuilder();
-            if (!target.isFaceUp()) {
-                target.setFaceUp(true);
-                sb.append(target.getType().getName()).append("应战，");
-            }
+            // 敌方牌 → 对战
             boolean attKills = canKill(card.getType(), target.getType());
             boolean defKills = canKill(target.getType(), card.getType());
 
@@ -180,6 +238,18 @@ public class GameLogic {
                 defKills = false;
             }
 
+            if (!attKills && !defKills) {
+                // 错误行动：双方都无法击杀对方，不翻牌、不移动、不切换回合
+                lastErrorHint = getErrHint(card.getType(), target.getType());
+                return false;
+            }
+
+            // 可对战：暗牌翻开应战
+            StringBuilder sb = new StringBuilder();
+            if (!target.isFaceUp()) {
+                target.setFaceUp(true);
+                sb.append(target.getType().getName()).append("应战，");
+            }
             if (attKills) {
                 board[toRow][toCol] = card;
                 board[fromRow][fromCol] = null;
@@ -206,8 +276,6 @@ public class GameLogic {
                     winner = target.getOwner();
                     sb.append("，烂头背枪阵亡！");
                 }
-            } else {
-                sb.append("平局退回");
             }
             lastAction = sb.toString();
             clearSwapIfMine();
@@ -248,7 +316,10 @@ public class GameLogic {
                 mergedType = CardType.BUCHONGXIAOHAI; mRow = row1; mCol = col1;
             }
         }
-        if (mergedType == null) return false;
+        if (mergedType == null) {
+            lastErrorHint = "你想的美";
+            return false;
+        }
 
         board[row1][col1] = null;
         board[row2][col2] = null;
@@ -273,6 +344,33 @@ public class GameLogic {
     private boolean canKill(CardType attacker, CardType defender) {
         Set<CardType> kills = KILL_MAP.get(attacker);
         return kills != null && kills.contains(defender);
+    }
+
+    /** 查错误提示：战斗牌对战/攻击中立可吃牌（猫咪/旺财） */
+    private String getErrHint(CardType att, CardType def) {
+        Map<CardType, String> m = ERR_HINT.get(att);
+        String h = (m != null) ? m.get(def) : null;
+        return h != null ? h : "这个操作没有效果";
+    }
+
+    /** 查错误提示：攻击中立不可吃牌（大树/巨石/洋枪/捕虫网） */
+    private String getNeutralErrHint(CardType att, CardType target) {
+        // 先查专属映射（猫咪/旺财有逐对文案）
+        Map<CardType, String> m = ERR_HINT.get(att);
+        if (m != null) {
+            String h = m.get(target);
+            if (h != null) return h;
+        }
+        // 按目标牌类型给通用提示
+        switch (target) {
+            case DASHU:     return "这是树，不是树苗";
+            case JUSHI:     return "只有烂头可以搬动巨石";
+            case BAIQIANG:
+            case HEIQIANG:  return "烂头的专属武器";
+            case BAIBUCHONG:
+            case HEIBUCHONG: return "小孩的专属道具";
+            default:        return "这个操作没有效果";
+        }
     }
 
     /** 公共查询：attacker能否击杀defender（供AI使用） */

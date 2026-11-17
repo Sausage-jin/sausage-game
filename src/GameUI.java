@@ -51,6 +51,7 @@ public class GameUI extends JFrame {
     private static final Color BTN_BG   = new Color(52, 58, 76);
     private static final Color BTN_FG   = new Color(225, 228, 238);
     private static final Color BORDER   = new Color(58, 64, 82);
+    private static final Color XIAOKAI  = new Color(110, 220, 170);  // 小开（机器人提示）
 
     public GameUI() {
         game = new GameLogic();
@@ -373,6 +374,23 @@ public class GameUI extends JFrame {
         chatPane.setCaretPosition(chatDoc.getLength());
     }
 
+    /** 小开发言：在聊天框显示机器人提示 */
+    private void xiaokaiSay(String text) {
+        appendChat("小开", text, XIAOKAI);
+        SoundManager.sfxChatReceive();
+    }
+
+    /** 操作失败：小开解释原因 */
+    private void onActionFailed() {
+        String hint = game.getLastErrorHint();
+        if (hint != null) {
+            xiaokaiSay(hint);
+            game.clearLastErrorHint();
+        }
+        cancelSel();
+        refresh();
+    }
+
     private void onChatReceived(String msg) {
         // 联机消息格式 "玩家号:昵称:文本"（玩家号 0=观众）
         String[] p = msg.split(":", 3);
@@ -510,6 +528,8 @@ public class GameUI extends JFrame {
                     || (card.getOwner() == 0 && card.getType().isMovable())) {
                 selRow = row; selCol = col;
                 boardPanel.setSelection(row, col); SoundManager.sfxCardSelect();
+            } else if (card.getOwner() == 0 && !card.getType().isMovable()) {
+                xiaokaiSay("他们没有腿");
             }
             return;
         }
@@ -535,6 +555,14 @@ public class GameUI extends JFrame {
                 sendOpIfOnline("SYN:" + selRow + ":" + selCol + ":" + row + ":" + col);
                 SoundManager.sfxCardMerge();
                 afterAction();
+            } else if (card.isFaceUp()
+                    && ((selCard.getOwner() == cur && card.getOwner() == 0)
+                     || (selCard.getOwner() == 0 && card.getOwner() == cur))
+                    && (card.getType().isQiang() || card.getType().isBuchong()
+                     || selCard.getType().isQiang() || selCard.getType().isBuchong())
+                    && !BoardPanel.isMergePair(selCard.getType(), card.getType())) {
+                // 合成组合不符
+                xiaokaiSay("你想的美");
             } else if (card.getOwner() == cur) {
                 if (card.isFaceUp()) {
                     selRow = row; selCol = col;
@@ -543,13 +571,15 @@ public class GameUI extends JFrame {
                     cancelSel();
                 }
             } else {
-                // 敌方牌→对战；中立牌→巨石交换/击杀猫咪旺财（move内部处理，无效则无动作）
+                // 敌方牌→对战；中立牌→巨石交换/击杀猫咪旺财
                 if (game.move(selRow, selCol, row, col)) {
                     sendOpIfOnline("MOVE:" + selRow + ":" + selCol + ":" + row + ":" + col);
                     SoundManager.sfxBattle();
                     SoundManager.sfxCardEat();
                     boardPanel.animateBattle(row, col);
                     afterAction();
+                } else {
+                    onActionFailed();
                 }
             }
         } else {
